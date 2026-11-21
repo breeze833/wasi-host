@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>wasi-host Interactive Browser Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #181818; color: #e5e5e5; margin: 24px; }
+    h1 { font-size: 1.4rem; margin-bottom: 8px; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 12px; background: #264f78; }
+    .badge.warn { background: #7a3e00; }
+    button { background: #0e639c; color: #fff; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; margin-right: 8px; }
+    button:hover { background: #1177bb; }
+    pre { background: #101010; border: 1px solid #333; padding: 12px; border-radius: 6px; min-height: 220px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>wasi-host Interactive Browser &amp; Worker Demo</h1>
+  <p>Cross-Origin Isolated: <span id="iso-badge" class="badge">checking...</span></p>
+  <p>
+    <button id="btn-run-worker">Run Wasm in Web Worker</button>
+    <button id="btn-run-sab">Run Wasm with SharedArrayBuffer Memory</button>
+    <button id="btn-clear">Clear Output</button>
+  </p>
+  <pre id="log"></pre>
+
+  <script type="module">
+    import { WasiHost, ProcExit } from '../src/index.js';
+
+    const logEl = document.getElementById('log');
+    const isoBadge = document.getElementById('iso-badge');
+    isoBadge.textContent = window.crossOriginIsolated ? 'ENABLED (SAB ready)' : 'DISABLED';
+    if (!window.crossOriginIsolated) isoBadge.classList.add('warn');
+
+    function log(msg) {
+      logEl.textContent += msg + '\n';
+    }
+
+    // Minimal valid WASI binary writing "Hello Browser WASI!\n" and exiting 7
+    function makeDemoWasm(sharedMemory = false) {
+      const msg = new TextEncoder().encode('Hello from Browser wasi-host!\n');
+      const encodeU32 = (n) => {
+        const out = [];
+        let v = n >>> 0;
+        do { let b = v & 0x7f; v >>>= 7; if (v) b |= 0x80; out.push(b); } while (v);
+        return out;
+      };
+      const encodeI32 = (n) => {
+        const out = [];
+        let v = n | 0, more = true;
+        while (more) {
+          let b = v & 0x7f; v >>= 7;
+          if ((v === 0 && (b & 0x40) === 0) || (v === -1 && (b & 0x40) !== 0)) more = false;
+          else b |= 0x80;
+          out.push(b);
+        }
+        return out;
+      };
+      const sec = (id, p) => [id, ...encodeU32(p.length), ...p];
+      const str = (s) => { const b = Array.from(new TextEncoder().encode(s)); return [...encodeU32(b.length), ...b]; };
+
+      const typeSec = sec(1, [3, 0x60, 4, 0x7f, 0x7f, 0x7f, 0x7f, 1, 0x7f, 0x60, 1, 0x7f, 0, 0x60, 0, 0]);
+      const importSec = sec(2, [
+        sharedMemory ? 3 : 2,
+        ...str('wasi_snapshot_preview1'), ...str('fd_write'), 0x00, 0,
+        ...str('wasi_snapshot_preview1'), ...str('proc_exit'), 0x00, 1,
+        ...(sharedMemory ? [...str('env'), ...str('memory'), 0x02, 0x03, 1, 1] : []),
+      ]);
+      const funcSec = sec(3, [1, 2]);
+      const memSec = sharedMemory ? [] : sec(5, [1, 0x00, 1]);
+      const exportSec = sec(7, [
+        sharedMemory ? 1 : 2,
+        ...(sharedMemory ? [] : [...str('memory'), 0x02, 0]),
+        ...str('_start'), 0x00, 2,
+      ]);
+      const body = [
+        0,
+        0x41, ...encodeI32(256), 0x41, ...encodeI32(128), 0x36, 2, 0,
+        0x41, ...encodeI32(260), 0x41, ...encodeI32(msg.length), 0x36, 2, 0,
+        0x41, 1, 0x41, ...encodeI32(256), 0x41, 1, 0x41, ...encodeI32(272), 0x10, 0, 0x1a,
+        0x41, ...encodeI32(7), 0x10, 1, 0x0b,
+      ];
+      const codeSec = sec(10, [1, ...encodeU32(body.length), ...body]);
+      const dataSec = sec(11, [1, 0x00, 0x41, ...encodeI32(128), 0x0b, ...encodeU32(msg.length), ...msg]);
+      return new Uint8Array([0x00, 0x61, 0x73, 0x6d, 1, 0, 0, 0, ...typeSec, ...importSec, ...funcSec, ...memSec, ...exportSec, ...codeSec, ...dataSec]);
+    }
+
+    document.getElementById('btn-run-worker').addEventListener('click', () => {
+      const wasm = makeDemoWasm(false);
+      const workerCode = `
+        import { WasiHost, ProcExit } from '${new URL('../src/index.js', import.meta.url).href}';
+        self.onmessage = async (e) => {
+          const vfs = new Map();
+          let memory = null;
+          const host = new WasiHost({
+            vfs,
+            cwd: '/workspace',
+            argv: ['demo.wasm'],
+            stdout: (t) => self.postMessage({ type: 'out', data: t }),
+            getMemory: () => memory,
+          });
+          const { instance } = await WebAssembly.instantiate(e.data.wasm, host.createImportObject());
+          memory = instance.exports.memory;
+          try {
+            instance.exports._start();
+            self.postMessage({ type: 'done', code: 0 });
+          } catch (err) {
+            if (err instanceof ProcExit) self.postMessage({ type: 'done', code: err.code });
+            else self.postMessage({ type: 'err', error: err.message });
+          }
+        };
+      `;
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      const worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+      worker.onmessage = (e) => {
+        if (e.data.type === 'out') log('[Worker stdout] ' + e.data.data.trimEnd());
+        if (e.data.type === 'done') { log('[Worker exit] code=' + e.data.code); worker.terminate(); }
+        if (e.data.type === 'err') { log('[Worker error] ' + e.data.error); worker.terminate(); }
+      };
+      worker.postMessage({ wasm });
+    });
+
+    document.getElementById('btn-run-sab').addEventListener('click', async () => {
+      if (!window.crossOriginIsolated) {
+        log('[SAB test] Cross-Origin Isolation is disabled; cannot instantiate shared WebAssembly.Memory.');
+        return;
+      }
+      const sharedMem = new WebAssembly.Memory({ initial: 1, maximum: 1, shared: true });
+      const wasm = makeDemoWasm(true);
+      let out = '';
+      const host = new WasiHost({
+        cwd: '/workspace',
+        stdout: (t) => { out += t; },
+        getMemory: sharedMem,
+      });
+      const imports = host.createImportObject({ memory: sharedMem });
+      const { instance } = await WebAssembly.instantiate(wasm, imports);
+      let code = 0;
+      try {
+        instance.exports._start();
+      } catch (err) {
+        if (err instanceof ProcExit) code = err.code;
+        else throw err;
+      }
+      log('[SAB memory stdout] ' + out.trimEnd() + ' (exit=' + code + ')');
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', () => { logEl.textContent = ''; });
+  </script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+{
+  "name": "wasi-host",
+  "version": "0.1.0",
+  "description": "Zero-dependency, language-neutral WASI Preview 1 (wasi_snapshot_preview1) process and execution host for WebAssembly runtimes",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.js"
+    },
+    "./constants": {
+      "types": "./types/index.d.ts",
+      "import": "./src/constants.js"
+    },
+    "./vfs-adapter": {
+      "types": "./types/index.d.ts",
+      "import": "./src/vfs-adapter.js"
+    }
+  },
+  "files": [
+    "src",
+    "types",
+    "examples",
+    "SPEC.md",
+    "README.md",
+    "AGENTS.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/wasi-host.test.js && node test/vfs-adapter.test.js && node test/devices.test.js && node test/syscalls.test.js && node examples/host-reference.js",
+    "test:host": "node examples/host-reference.js",
+    "demo": "node examples/serve.js",
+    "start": "node examples/serve.js",
+    "pack": "mkdir -p dist && npm pack --pack-destination dist/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/breeze833/wasi-host.git"
+  },
+  "bugs": {
+    "url": "https://github.com/breeze833/wasi-host/issues"
+  },
+  "homepage": "https://github.com/breeze833/wasi-host#readme",
+  "keywords": [
+    "wasi",
+    "wasi-host",
+    "wasip1",
+    "wasi_snapshot_preview1",
+    "wasm",
+    "webassembly",
+    "vfs",
+    "browser",
+    "worker"
+  ],
+  "author": "breeze833",
+  "license": "MIT"
+}
