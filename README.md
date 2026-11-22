@@ -34,13 +34,13 @@ It decouples process lifecycle, argument/environment passing, clocks, cryptograp
 ### Install via GitHub Releases Tarball
 
 ```bash
-npm install https://github.com/breeze833/wasi-host/releases/download/latest/wasi-host-0.1.0.tgz
+npm install https://github.com/breeze833/wasi-host/releases/download/latest/wasi-host-0.1.1.tgz
 ```
 
 Or pin a specific release tag:
 
 ```bash
-npm install https://github.com/breeze833/wasi-host/releases/download/v0.1.0/wasi-host-0.1.0.tgz
+npm install https://github.com/breeze833/wasi-host/releases/download/v0.1.1/wasi-host-0.1.1.tgz
 ```
 
 Or add directly to your `package.json`:
@@ -48,7 +48,7 @@ Or add directly to your `package.json`:
 ```json
 {
   "dependencies": {
-    "wasi-host": "https://github.com/breeze833/wasi-host/releases/download/latest/wasi-host-0.1.0.tgz"
+    "wasi-host": "https://github.com/breeze833/wasi-host/releases/download/latest/wasi-host-0.1.1.tgz"
   }
 }
 ```
