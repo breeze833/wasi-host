@@ -31,7 +31,7 @@ Previously, the `WasiHost` implementation lived inside `clang-wasi/host`, creati
 - **Zero Required Runtime Dependencies**: Pure vanilla JavaScript / TypedArrays with zero mandatory external npm dependencies.
 - **Language Neutrality**: Zero hardcoded C/C++ or Python paths, binary names, or compiler defaults.
 - **VFS Flexibility & `vfs-wasi` Composition**:
-  - Integrates seamlessly with `vfs-wasi` (`OverlayVFS` / `createWasiFsImports`) for Two-Tier Overlay VFS, zero-copy `SharedSysroot`, `EROFS` protection, and `mtime` persistence.
+  - Integrates seamlessly with `vfs-wasi` (`OverlayVFS`, `v0.2.0+`) for Two-Tier Overlay VFS, zero-copy `SharedSysroot`, `EROFS` protection, and `mtime` persistence.
   - Also supports standalone `Map<string, Uint8Array | string>` or plain JavaScript object stores out of the box.
 - **W3C `TextDecoder` SharedArrayBuffer Compliance**: Any string decoded from WebAssembly linear memory backed by a `SharedArrayBuffer` MUST be copied to an unshared `Uint8Array` before passing to `TextDecoder.decode()`.
 - **Pure WASI Core + Explicit Extension Hooks**: Shell pipe wrappers (`busybox-wasi`), synchronous stdin (`stdin-wasi`), and custom `env` bridges (`canvas-wasi`, `raylib-wasi`, `make-wasi`) attach via explicit constructor options rather than being baked into core syscalls.
@@ -86,7 +86,7 @@ import { WasiHost, ProcExit, normalizePath } from 'wasi-host';
 
 const host = new WasiHost({
   vfs: overlayVfsOrMap,              // OverlayVFS, Map<string, Uint8Array|string>, or plain object
-  fsImports: null,                   // Optional prebuilt FS imports (e.g. from vfs-wasi/wasi-fs)
+  fsImports: null,                   // Optional custom WASI filesystem syscall overrides
   cwd: '/',                          // Current working directory (default: '/')
   argv: ['wasm'],                    // Command-line arguments (default: ['wasm'])
   environ: { HOME: '/', PWD: '/' },  // Environment variables (default: { HOME: cwd, PWD: cwd })
